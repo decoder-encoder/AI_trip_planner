@@ -412,10 +412,20 @@ graph.add_edge("final_agent", END)
 
 
 # Persistent connection so both CLI and Streamlit can share the compiled app
-_conn = psycopg.connect(DATABASE_URL,  
-                          autocommit=True
+from psycopg_pool import ConnectionPool
+if "sslmode" not in DATABASE_URL:
+    DATABASE_URL += "?sslmode=require"
+
+pool = ConnectionPool(
+    conninfo=DATABASE_URL,
+    min_size=1,
+    max_size=5,
+    open=True,
+    timeout=30,
+    max_lifetime=600
 )
-checkpointer = PostgresSaver(_conn)
+
+checkpointer = PostgresSaver(pool)
 checkpointer.setup()
 
 app = graph.compile(checkpointer=checkpointer)
