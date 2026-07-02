@@ -363,6 +363,8 @@ def load_conversation(thread_id):
 # ===================== Init =====================
 
 init_session()
+if "trip_input" not in st.session_state:
+    st.session_state.trip_input = ""
 if "config" not in st.session_state:
     st.session_state.config = {
         "configurable": {
@@ -469,12 +471,14 @@ quick_fill = ""
 for qc, label in zip(qcols, QUICK):
     with qc:
         if st.button(label, key=f"q_{label}"):
-            quick_fill = label
+            st.session_state.trip_input = label
+            st.rerun()
+            # quick_fill = label
 
 user_query = st.text_area(
     
     "",
-    value=quick_fill,
+    key="trip_input",
     placeholder="e.g. Plan a complete 7-day Japan trip including flights, hotels and sightseeing under ₹2 lakhs",
     height=100,
     label_visibility="collapsed",

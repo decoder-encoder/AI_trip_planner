@@ -1,0 +1,11 @@
+
+.git
+.streamlit
+__pycache__
+langgraph_env3
+faiss_index
+.env
+*.pdf
+*.pyc
+*.pyo
+*.pyd
