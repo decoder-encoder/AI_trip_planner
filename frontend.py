@@ -6,6 +6,22 @@ from main import app
 from main import  chatbot
 from langgraph.types import Command
 import uuid
+import faiss
+# 1. FAISS Cache
+@st.cache_resource
+def get_faiss_index():
+    # Path wahi dena jo aapke project folder mein hai
+    return faiss.read_index("faiss_index/index.faiss")
+
+# 2. Graph Cache
+@st.cache_resource
+def get_compiled_graph():
+    return app  # Aapka already compiled graph
+
+# Ab yahan variables assign karo
+index = get_faiss_index()
+app = get_compiled_graph()
+# ----------------------------------------
 
 st.set_page_config(
     page_title="AI Travel Booking System",

@@ -40,4 +40,5 @@ HEALTHCHECK CMD curl --fail http://localhost:8501/_stcore/health
 
 Command to run the application
 
-ENTRYPOINT ["streamlit", "run", "frontend.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# AI_trip_planner/Dockerfile mein ye line change karo:
+ENTRYPOINT ["streamlit", "run", "frontend.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
