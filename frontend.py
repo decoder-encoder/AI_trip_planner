@@ -6,22 +6,38 @@ from main import app
 from main import  chatbot
 from langgraph.types import Command
 import uuid
-import faiss
-# 1. FAISS Cache
-@st.cache_resource
-def get_faiss_index():
-    # Path wahi dena jo aapke project folder mein hai
-    return faiss.read_index("faiss_index/index.faiss")
+from tools.rag_tool import get_vector_store
 
-# 2. Graph Cache
+
+# 1. FAISS Cache
+# @st.cache_resource
+# def get_faiss_index():
+#     # Path wahi dena jo aapke project folder mein hai
+#     return faiss.read_index("faiss_index/index.faiss")
+
+# # 2. Graph Cache
+# @st.cache_resource
+# def get_compiled_graph():
+#     return app  # Aapka already compiled graph
+
+# # Ab yahan variables assign karo
+# index = get_faiss_index()
+# app = get_compiled_graph()
+# ----------------------------------------
+# ===================== MEMORY OPTIMIZATION =====================
+@st.cache_resource
+def get_vector_store_cached():
+    # Ab ye Pinecone connection object return karega
+    return get_vector_store()
+
 @st.cache_resource
 def get_compiled_graph():
-    return app  # Aapka already compiled graph
+    # Graph wahi rahega
+    return app 
 
-# Ab yahan variables assign karo
-index = get_faiss_index()
+# Ab variables initialize karo
+vector_store = get_vector_store_cached()
 app = get_compiled_graph()
-# ----------------------------------------
 
 st.set_page_config(
     page_title="AI Travel Booking System",
@@ -508,8 +524,9 @@ st.markdown("### 📚 Add Knowledge Base (PDF for RAG)")
 uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
 
 if uploaded_file is not None:
-
     import tempfile
+    from langchain_community.document_loaders import PyPDFLoader
+    from tools.rag_tool import get_vector_store
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
         tmp.write(uploaded_file.read())
@@ -518,18 +535,18 @@ if uploaded_file is not None:
     st.session_state.temp_pdf_path = temp_pdf_path
 
     st.success("📄 PDF uploaded successfully!")
-    if "temp_pdf_path" in st.session_state:
-
-        if st.button("📦 Build RAG Knowledge Base"):
-
-            from tools.rag_tool import build_vectorstore_from_pdf
-
-            with st.spinner("Building FAISS index..."):
-                build_vectorstore_from_pdf(st.session_state.temp_pdf_path)
-
+    
+    if st.button("📦 Build RAG Knowledge Base"):
+        with st.spinner("Uploading to Pinecone..."):
+            # PDF Load karo
+            loader = PyPDFLoader(temp_pdf_path)
+            docs = loader.load()
+            
+            # Pinecone mein save karo
+            get_vector_store(documents=docs)
+            
             st.session_state.rag_ready = True
-
-            st.success("✅ RAG is now ACTIVE")
+            st.success("✅ RAG is now ACTIVE on Pinecone!")
 
 # ── Agent pipeline ────────────────────────────────────────────────────────────
 AGENT_META = {

@@ -1,50 +1,60 @@
+
 import os
-from dotenv import load_dotenv
-from langchain_community.document_loaders import PyPDFLoader
-from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.vectorstores import FAISS
-# CHANGE: HuggingFace hataya, Google Gemini add kiya
+from langchain_pinecone import PineconeVectorStore
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
-from langchain_core.messages import AIMessage
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
-load_dotenv()
-
-# .env file se apni Google API key uthao
-GOOGLE_API_KEY = os.getenv("GOOGLE_GEMINI_API_KEY")
-
-# CHANGE: Initialize Google Embedding model (No local Torch required)
+# 1. Embeddings configuration
+# Google Gemini API key aapke environment variables mein honi chahiye
 embeddings = GoogleGenerativeAIEmbeddings(
     model="models/gemini-embedding-001",
-    # task_type="retrieval_document",
-    google_api_key=GOOGLE_API_KEY
+    google_api_key=os.getenv("GOOGLE_GEMINI_API_KEY")
 )
 
-VECTORSTORE_PATH = "faiss_index"
+# 2. Pinecone Index Name (Pinecone console par jo naam rakha hai wahi yahan daalein)
+index_name = "travel-data"
 
-def build_vectorstore_from_pdf(pdf_path: str):
-    loader = PyPDFLoader(pdf_path)
-    docs = loader.load()
-    splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = splitter.split_documents(docs)
+def get_vector_store(documents=None):
+    """
+    Pinecone Cloud RAG operation:
+    1. Agar documents hain -> Chunking + Filtering (Empty chunks hatana) + Upsert
+    2. Agar documents nahi hain -> Sirf Querying ke liye vectorstore return karega
+    """
+    if documents:
+        # Step 1: Text Splitter (Empty chunks ko filter karne ke liye zaroori)
+        text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000, 
+            chunk_overlap=200
+        )
+        splits = text_splitter.split_documents(documents)
+        
+        # Step 2: Sirf wo chunks rakho jismein valid text hai
+        final_docs = [d for d in splits if d.page_content.strip()]
+        
+        # Step 3: Pinecone mein upsert
+        vectorstore = PineconeVectorStore.from_documents(
+            final_docs, 
+            embeddings, 
+            index_name=index_name
+        )
+        return vectorstore
     
-    # Ab vectorization Google Cloud par hoga, aapki RAM use nahi hogi
-    vectorstore = FAISS.from_documents(chunks, embeddings)
-    vectorstore.save_local(VECTORSTORE_PATH)
-    return "Vectorstore created successfully using Google Gemini API!"
-
-def load_vectorstore():
-    # FAISS local index load karega, embeddings sirf query ke liye use hogi
-    return FAISS.load_local(
-        VECTORSTORE_PATH, 
-        embeddings, 
-        allow_dangerous_deserialization=True
-    )
+    else:
+        # Querying ke liye connection
+        return PineconeVectorStore(
+            index_name=index_name, 
+            embedding=embeddings
+        )
 
 def retrieve_docs(query: str):
+    """
+    Query ke liye Pinecone se relevant documents fetch karega.
+    """
     try:
-        db = load_vectorstore()
+        db = get_vector_store()
+        # Pinecone se vector search perform karein
         retriever = db.as_retriever(search_type="mmr", search_kwargs={"k": 4})
         docs = retriever.invoke(query)
         return "\n\n".join(d.page_content for d in docs)
     except Exception as e:
-        return f"Error loading index: {e}"
+        return f"Error querying Pinecone index: {e}"

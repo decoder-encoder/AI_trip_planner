@@ -485,10 +485,17 @@ graph.add_edge("final_agent", END)
 
 # Persistent connection so both CLI and Streamlit can share the compiled app
 from psycopg_pool import ConnectionPool
-if "sslmode" not in DATABASE_URL:
+import os
+import psycopg_pool
+from langgraph.checkpoint.postgres import PostgresSaver
+
+# 1. Database URL fix
+DATABASE_URL = os.getenv("DATABASE_URL")
+if DATABASE_URL and "sslmode" not in DATABASE_URL:
     DATABASE_URL += "?sslmode=require"
 
-pool = ConnectionPool(
+# 2. Connection Pool (Optimized for Neon/Render)
+pool = psycopg_pool.ConnectionPool(
     conninfo=DATABASE_URL,
     min_size=1,
     max_size=5,
@@ -497,11 +504,24 @@ pool = ConnectionPool(
     max_lifetime=600
 )
 
-checkpointer = PostgresSaver(pool)
-checkpointer.setup()
+# 3. Minimal Wrapper for Checkpointer (AdminShutdown error fix)
+def get_checkpointer():
+    try:
+        checkpointer = PostgresSaver(pool)
+        # setup() ko try-except mein rakhein taaki startup crash na ho
+        checkpointer.setup()
+        return checkpointer
+    except Exception as e:
+        print(f"Warning: Checkpointer setup failed: {e}")
+        return None
 
+# Checkpointer initialize karein
+checkpointer = get_checkpointer()
+
+# Graph compile (Agar checkpointer None hai, toh bina checkpointing ke chalega)
 app = graph.compile(checkpointer=checkpointer)
 chatbot = app
+
 
 if __name__ == "__main__":
     pdf_path = input("Enter PDF path: ")
